@@ -1,5 +1,5 @@
-[build]
-target = "arm-linux-androideabi"
-
 [target.arm-linux-androideabi]
 linker = "/home/dicej/Downloads/android-18-toolchain/bin/arm-linux-androideabi-clang"
+
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-Ctarget-feature=+crt-static"]

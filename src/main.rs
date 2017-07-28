@@ -1,20 +1,21 @@
 #[macro_use]
 extern crate derive_error;
 
-extern crate ws;
 extern crate hyper;
 extern crate hyper_tls;
 extern crate native_tls;
 extern crate tokio_core;
 extern crate futures;
+extern crate websocket;
 
 use std::io::{self, Write};
 use futures::{Future, Stream};
 use hyper::Client;
 use hyper_tls::HttpsConnector;
 use tokio_core::reactor::Core;
-
-use ws::{connect, Handler, Sender, Handshake, Message, CloseCode};
+use websocket::{ClientBuilder, Message};
+use websocket::message::OwnedMessage;
+use websocket::futures::Sink;
 
 #[derive(Debug, Error)]
 enum MyError {
@@ -22,35 +23,27 @@ enum MyError {
     TlsError(native_tls::Error),
     UriError(hyper::error::UriError),
     HyperError(hyper::Error),
-    WsError(ws::Error)
-}
-
-struct WSClient {
-    out: Sender,
-}
-
-impl Handler for WSClient {
-    fn on_open(&mut self, _: Handshake) -> ws::Result<()> {
-        println!("on_open");
-        self.out.send("Hello WebSocket")
-    }
-
-    fn on_message(&mut self, msg: Message) -> ws::Result<()> {
-        println!("Got message: {}", msg);
-        self.out.close(CloseCode::Normal)
-    }
-
-    fn on_error(&mut self, err: ws::Error) {
-        println!("Got error: {}", err);
-    }
+    ParseError(websocket::client::ParseError),
+    WebsocketError(websocket::WebSocketError)
 }
 
 fn run() -> Result<(), MyError> {
     println!("Hello, world!");
-    connect("wss://echo.websocket.org", |out| WSClient { out: out })?;
 
     let mut core = Core::new()?;
     let handle = core.handle();
+
+    let ws_client = ClientBuilder::new("wss://echo.websocket.org")?
+        .async_connect(None, &handle)
+        .and_then(|(s, _)| s.send(Message::text("hallo").into()))
+        .and_then(|s| s.into_future().map_err(|e| e.0))
+        .map(|(m, _)| match m {
+            Some(OwnedMessage::Text(text)) => println!("Got message: {}", text),
+            _=> (),
+        });
+
+    core.run(ws_client)?;
+    
     let client = Client::configure()
         .connector(HttpsConnector::new(4, &handle)?)
         .build(&handle);

@@ -10,7 +10,4 @@ hyper-tls = "*"
 native-tls = "*"
 tokio-core = "*"
 derive-error = "*"
-
-[dependencies.ws]
-version = "*"
-features = ["ssl"]
+websocket = "*"
