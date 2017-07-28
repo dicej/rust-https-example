@@ -8,8 +8,9 @@ extern crate tokio_core;
 extern crate futures;
 extern crate websocket;
 
-use std::io::{self, Write};
-use futures::{Future, Stream};
+use std::io::{self};
+use futures::{Future, Stream, Poll};
+use futures::future::join_all;
 use hyper::Client;
 use hyper_tls::HttpsConnector;
 use tokio_core::reactor::Core;
@@ -27,6 +28,26 @@ enum MyError {
     WebsocketError(websocket::WebSocketError)
 }
 
+struct ResultFuture<A> where A: Future {
+    result: Option<Result<A,A::Error>>
+}
+
+impl<A> Future for ResultFuture<A> where A: Future {
+    type Item = A::Item;
+    type Error = A::Error;
+
+    fn poll(&mut self) -> Poll<A::Item, A::Error> {
+        match self.result {
+            Some(Ok(ref mut future)) => future.poll(),
+            _ => Err(self.result.take().expect("cannot poll twice").err().unwrap())
+        }
+    }
+}
+
+fn result_future<A>(result: Result<A,A::Error>) -> ResultFuture<A> where A: Future {
+    ResultFuture { result: Some(result) }
+}
+
 fn run() -> Result<(), MyError> {
     println!("Hello, world!");
 
@@ -42,23 +63,23 @@ fn run() -> Result<(), MyError> {
             _=> (),
         });
 
-    core.run(ws_client)?;
-    
     let client = Client::configure()
         .connector(HttpsConnector::new(4, &handle)?)
         .build(&handle);
 
-    let work = client.get("https://hyper.rs".parse()?).and_then(|res| {
-        println!("Response: {}", res.status());
+    core.run
+        (ws_client.map_err(MyError::from).join
+         (join_all
+          (["hyper.rs", "google.com"].iter()
+           .map(|host| format!("https://{}", host).parse()
+                .map_err(hyper::Error::from)
+                .map(|uri| client.get(uri))
+                .map(|future| future.map
+                     (move |res| println!
+                      ("{} response: {}", host, res.status()))))
+           .map(result_future)).map_err(MyError::from)))?;
 
-        res.body().for_each(|chunk| {
-            io::stdout()
-                .write_all(&chunk)
-                .map_err(From::from)
-        })
-    });
-
-    core.run(work).map_err(MyError::from)
+    Ok(())
 }
 
 fn main() {
