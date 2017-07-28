@@ -1,0 +1,16 @@
+[package]
+name = "hello"
+version = "0.1.0"
+authors = ["Joel Dice <joel.dice@gmail.com>"]
+
+[dependencies]
+futures = "*"
+hyper = "*"
+hyper-tls = "*"
+native-tls = "*"
+tokio-core = "*"
+derive-error = "*"
+
+[dependencies.ws]
+version = "*"
+features = ["ssl"]
