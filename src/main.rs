@@ -58,7 +58,7 @@ fn run() -> Result<(), MyError> {
         })
     });
 
-    Result::Ok(core.run(work)?)
+    core.run(work).map_err(MyError::from)
 }
 
 fn main() {
